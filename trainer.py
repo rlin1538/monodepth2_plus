@@ -28,7 +28,7 @@ from IPython import embed
 
 
 #采用GPU1
-torch.cuda.set_device(1) 
+torch.cuda.set_device(0)
 
 class Trainer:
 

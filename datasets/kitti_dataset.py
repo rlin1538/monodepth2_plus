@@ -24,7 +24,12 @@ class KITTIDataset(MonoDataset):
 
         # NOTE: Make sure your intrinsics matrix is *normalized* by the original image size
         # #确保你的内部矩阵是*标准化*原始图像大小   
-        # 内参矩阵 
+        # 内参矩阵
+        # 自测相机内参（小米13，录像模式，720p默认设置）：
+        # [[763.22380049   0.         563.25937199]
+        #  [0.         733.60015515 339.65799459]
+        # [0            0.          1.]]
+
         self.K = np.array([[0.58, 0, 0.5, 0],
                            [0, 1.92, 0.5, 0],
                            [0, 0, 1, 0],
