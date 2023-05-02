@@ -23,7 +23,7 @@ import datasets
 import networks
 from IPython import embed
 #多GPU
-# import os
+import os
 # os.environ['CUDA_VISIBLE_DEVICES'] = "0, 1"
 
 
@@ -384,6 +384,10 @@ class Trainer:
         #                   ("color_identity2",-1,scale)]
         self.generate_images_pred(inputs, outputs)
 
+        # 位姿迭代模块
+        if self.opt.iterative_pose:
+            self.residual_pose_estimation(inputs, outputs)
+
 
         #结合inputs[]、和outputs[]计算losses
         #inputs： (inputs[], ouputs[])
@@ -391,7 +395,114 @@ class Trainer:
         losses = self.compute_losses(inputs,outputs)
 
 
+        """
+        Inputs:
+        dict_keys([('K', 0), ('inv_K', 0), ('K', 1), ('inv_K', 1), ('K', 2), ('inv_K', 2), ('K', 3), ('inv_K', 3), 
+            ('color', 0, 0), ('color', 0, 1), ('color', 0, 2), ('color', 0, 3), 
+            ('color', -1, 0), ('color', -1, 1), ('color', -1, 2), ('color', -1, 3), 
+            ('color', 1, 0), ('color', 1, 1), ('color', 1, 2), ('color', 1, 3), 
+            ('color_aug', 0, 0), ('color_aug', 0, 1), ('color_aug', 0, 2), ('color_aug', 0, 3), 
+            ('color_aug', -1, 0), ('color_aug', -1, 1), ('color_aug', -1, 2), ('color_aug', -1, 3), 
+            ('color_aug', 1, 0), ('color_aug', 1, 1), ('color_aug', 1, 2), ('color_aug', 1, 3)])
+        
+        Outputs:
+        dict_keys([('disp', 3), ('disp', 2), ('disp', 1), ('disp', 0), 
+            ('axisangle', 0, -1), ('translation', 0, -1), ('cam_T_cam', 0, -1), 
+            ('axisangle', 0, 1), ('translation', 0, 1), ('cam_T_cam', 0, 1), 
+            ('depth', 0, 0), ('sample', -1, 0), ('color', -1, 0), ('color_identity', -1, 0), ('sample', 1, 0), ('color', 1, 0), ('color_identity', 1, 0), 
+            ('depth', 0, 1), ('sample', -1, 1), ('color', -1, 1), ('color_identity', -1, 1), ('sample', 1, 1), ('color', 1, 1), ('color_identity', 1, 1), 
+            ('depth', 0, 2), ('sample', -1, 2), ('color', -1, 2), ('color_identity', -1, 2), ('sample', 1, 2), ('color', 1, 2), ('color_identity', 1, 2), 
+            ('depth', 0, 3), ('sample', -1, 3), ('color', -1, 3), ('color_identity', -1, 3), ('sample', 1, 3), ('color', 1, 3), ('color_identity', 1, 3)])
+
+        """
         return outputs, losses
+
+    def residual_pose_estimation(self, inputs, outputs):
+
+        outputs_iterative = {}
+
+        pose_feats = {f_i: inputs["color_aug", f_i, 0] for f_i in self.opt.frame_ids}
+
+        # 迭代位姿估计
+        # 以f_i作为迭代器,只要(-1,1,s)
+        # 计算(-1,0)和(0,1)之间的角度和旋转轴
+        for f_i in self.opt.frame_ids[1:]:
+            if f_i != "s":
+                features = self.models["encoder"](outputs[("color", f_i, 0)])
+                outputs_iterative = self.models["depth"](features)
+
+                if f_i < 0:
+                    pose_inputs = [pose_feats[f_i], outputs[("color", f_i, 0)]]
+                else:
+                    pose_inputs = [outputs[("color", f_i, 0)], pose_feats[f_i]]
+
+                pose_inputs = [self.models["pose_encoder"](torch.cat(pose_inputs, 1))]
+
+                # pose_decoder:
+                # inputs: pose_inputs
+                # outpus: axisangle(shape:(1,2,1,3)), translation(shape:(1,2,1,3))
+                axisangle, translation = self.models["pose"](pose_inputs)
+
+                # outputs["axisangle","translation","cam_T_cam"]
+                outputs_iterative[("axisangle", 0, f_i)] = axisangle
+                outputs_iterative[("translation", 0, f_i)] = translation
+
+                outputs_iterative[("cam_T_cam", 0, f_i)] = transformation_from_parameters(
+                    axisangle[:, 0], translation[:, 0], invert=(f_i < 0))
+
+                # 重投影生成新的合成图像
+                for scale in self.opt.scales:
+                    disp = outputs_iterative[("disp", scale)]
+                    # 如果采用monodepth1里的多尺度，尺度直接采用scale
+                    if self.opt.v1_multiscale:
+                        source_scale = scale
+                    # 否则，直接用0
+                    else:
+                        disp = F.interpolate(
+                            disp, [self.opt.height, self.opt.width], mode="bilinear", align_corners=False)
+                        source_scale = 0
+
+                    # 从视差图转换为深度预测，
+                    # disp_to_depth（）返回值：scaled_disp,depth
+                    _, depth = disp_to_depth(disp, self.opt.min_depth, self.opt.max_depth)
+
+                    # 将当前scale下的depth估计出来，并记录到outputs中
+                    # outputs[("depth", 0, scale)] = depth
+
+                    # depth为It的深度图Dt，depth2为It+1的深度图
+                    # 1、将Dt  warp到t—1、t+1、R上去
+                    T = outputs_iterative[("cam_T_cam", 0, f_i)]
+                    # 根据深度图，计算空间点
+                    cam_points = self.backproject_depth[source_scale](
+                        depth, inputs[("inv_K", source_scale)])
+                    # 根据空间点，投影，生成预测像素
+                    pix_coords = self.project_3d[source_scale](
+                        cam_points, inputs[("K", source_scale)], T)
+
+                    # 根据预测的像素，swarp到图像上
+                    outputs[("sample", f_i, scale)] = pix_coords
+                    outputs[("color", f_i, scale)] = F.grid_sample(
+                        outputs[("color", f_i, source_scale)],
+                        outputs[("sample", f_i, scale)],
+                        padding_mode="border")
+
+                    if not self.opt.disable_automasking:
+                        outputs[("color_identity", f_i, scale)] = \
+                            outputs[("color", f_i, source_scale)]
+
+                # 更新outputs中的图像及T
+                outputs[("cam_T_cam", 0, f_i)] = torch.matmul(outputs[("cam_T_cam", 0, f_i)], outputs_iterative[("cam_T_cam", 0, f_i)])
+
+
+
+
+        """
+                cam_T_cam:
+                [ 1.0000e+00, -8.4643e-04,  9.3066e-04, -2.0670e-05],
+                [ 8.4598e-04,  1.0000e+00,  5.0183e-04,  4.1473e-04],
+                [-9.3108e-04, -5.0107e-04,  1.0000e+00,  7.4048e-04],
+                [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  1.0000e+00]
+                """
 
 
     #预测frame_ids之间的位姿

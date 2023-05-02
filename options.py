@@ -170,6 +170,11 @@ class MonodepthOptions:
         #                          help="normal or shared",
         #                          default="separate_resnet",
         #                          choices=["posecnn", "separate_resnet", "shared"])
+            # 迭代位姿是否开启。
+        self.parser.add_argument("--iterative_pose",
+                                 type=str,
+                                 help="is iterative pose network open",
+                                 action="store_true")
 
         # SYSTEM options系统选项
           #是否使用gpu
