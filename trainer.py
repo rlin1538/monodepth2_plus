@@ -275,8 +275,8 @@ class Trainer:
             duration = time.time() - before_op_time
 
             #2000步后，降低记录频率
-            early_phase = batch_idx % self.opt.log_frequency == 0 and self.step < 2000
-            late_phase = self.step % 2000 == 0
+            early_phase = batch_idx % self.opt.log_frequency == 0 and self.step < 4000
+            late_phase = self.step % 4000 == 0
 
             if early_phase or late_phase:
                 
