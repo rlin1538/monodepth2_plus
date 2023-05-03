@@ -419,8 +419,6 @@ class Trainer:
 
     def residual_pose_estimation(self, inputs, outputs):
 
-        outputs_iterative = {}
-
         pose_feats = {f_i: inputs["color_aug", f_i, 0] for f_i in self.opt.frame_ids}
 
         # 迭代位姿估计
@@ -491,7 +489,11 @@ class Trainer:
                             outputs[("color", f_i, source_scale)]
 
                 # 更新outputs中的图像及T
+                print("before matmul:")
+                print(outputs[("cam_T_cam", 0, f_i)])
                 outputs[("cam_T_cam", 0, f_i)] = torch.matmul(outputs[("cam_T_cam", 0, f_i)], outputs_iterative[("cam_T_cam", 0, f_i)])
+                print("after matmul:")
+                print(outputs[("cam_T_cam", 0, f_i)])
 
 
 
