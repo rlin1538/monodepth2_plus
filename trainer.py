@@ -444,6 +444,7 @@ class Trainer:
                 # outputs["axisangle","translation","cam_T_cam"]
                 outputs_iterative[("axisangle", 0, f_i)] = axisangle
                 outputs_iterative[("translation", 0, f_i)] = translation
+                print(axisangle, translation)
 
                 outputs_iterative[("cam_T_cam", 0, f_i)] = transformation_from_parameters(
                     axisangle[:, 0], translation[:, 0], invert=(f_i < 0))
@@ -480,7 +481,7 @@ class Trainer:
                     # 根据预测的像素，swarp到图像上
                     outputs[("sample", f_i, scale)] = pix_coords
                     outputs[("color", f_i, scale)] = F.grid_sample(
-                        outputs[("color", f_i, source_scale)],
+                        inputs[("color", f_i, source_scale)],
                         outputs[("sample", f_i, scale)],
                         padding_mode="border")
 
@@ -491,7 +492,8 @@ class Trainer:
                 # 更新outputs中的图像及T
                 print("before matmul:")
                 print(outputs[("cam_T_cam", 0, f_i)])
-                outputs[("cam_T_cam", 0, f_i)] = torch.matmul(outputs[("cam_T_cam", 0, f_i)], outputs_iterative[("cam_T_cam", 0, f_i)])
+                print(outputs_iterative[("cam_T_cam", 0, f_i)])
+                outputs[("cam_T_cam", 0, f_i)] = torch.bmm(outputs[("cam_T_cam", 0, f_i)], outputs_iterative[("cam_T_cam", 0, f_i)])
                 print("after matmul:")
                 print(outputs[("cam_T_cam", 0, f_i)])
 
