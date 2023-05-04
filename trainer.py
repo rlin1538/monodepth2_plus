@@ -444,7 +444,7 @@ class Trainer:
                 # outputs["axisangle","translation","cam_T_cam"]
                 outputs_iterative[("axisangle", 0, f_i)] = axisangle
                 outputs_iterative[("translation", 0, f_i)] = translation
-                print(axisangle, translation)
+                # print(axisangle, translation)
 
                 outputs_iterative[("cam_T_cam", 0, f_i)] = transformation_from_parameters(
                     axisangle[:, 0], translation[:, 0], invert=(f_i < 0))
@@ -490,12 +490,12 @@ class Trainer:
                             outputs[("color", f_i, source_scale)]
 
                 # 更新outputs中的图像及T
-                print("before matmul:")
-                print(outputs[("cam_T_cam", 0, f_i)])
-                print(outputs_iterative[("cam_T_cam", 0, f_i)])
+                # print("before matmul:")
+                # print(outputs[("cam_T_cam", 0, f_i)])
+                # print(outputs_iterative[("cam_T_cam", 0, f_i)])
                 outputs[("cam_T_cam", 0, f_i)] = torch.bmm(outputs[("cam_T_cam", 0, f_i)], outputs_iterative[("cam_T_cam", 0, f_i)])
-                print("after matmul:")
-                print(outputs[("cam_T_cam", 0, f_i)])
+                # print("after matmul:")
+                # print(outputs[("cam_T_cam", 0, f_i)])
 
 
 
