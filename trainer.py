@@ -803,7 +803,7 @@ class Trainer:
     def compute_depth_losses(self, inputs, outputs,losses):
         depth_pred = outputs[("depth", 0, 0)]      
 
-        depth_pred = torch.clamp(F.interpolate(depth_pred,[375,1242], 
+        depth_pred = torch.clamp(F.interpolate(depth_pred,[480,640],
             mode="bilinear", align_corners=False),1e-3, 80)
 
         #梯度分割，

@@ -36,7 +36,7 @@ class KITTIDataset(MonoDataset):
                            [0, 0, 0, 1]], dtype=np.float32)
 
         #图像reshape大小
-        self.full_res_shape = (1242, 375)
+        self.full_res_shape = (640, 480)
         #代表左图还是右图。
         self.side_map = {"2": 2, "3": 3, "l": 2, "r": 3}
 
